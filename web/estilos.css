@@ -116,6 +116,14 @@ main{min-width:0;padding:26px 28px 60px;max-width:1300px;width:100%}
 .pn{font-weight:600}.prod.on .pn{font-weight:800}
 .pp{font-weight:700;white-space:nowrap;color:var(--muted)}.prod.on .pp{color:var(--ink)}
 .stp{display:flex;align-items:center;gap:4px}
+.sabs{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px;padding:4px 8px 12px 48px;border-bottom:1px solid var(--line);background:#fff;border-radius:0 0 6px 6px}
+.sabst{grid-column:1/-1;font-weight:800;font-size:.88rem;color:var(--st)}
+.sab{display:flex;align-items:center;justify-content:space-between;gap:6px;border:1px solid var(--line);border-radius:10px;padding:4px 6px 4px 10px;font-weight:700;font-size:.92rem}
+.sab.on{border-color:var(--brand);background:var(--brand-soft)}
+.sab .stp button{width:28px;height:28px;font-size:.95rem}
+.sabq{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
+.sabq .chip{font-size:.8rem;padding:5px 10px}
+.ticket .sabt{font-size:13px}
 .stp button{width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:#fff;font-weight:800;font-size:1.05rem;line-height:1}
 .stp output{min-width:26px;text-align:center;font-weight:800}
 .field{display:flex;flex-direction:column;gap:4px;font-weight:700;font-size:.85rem;color:var(--muted);min-width:0}

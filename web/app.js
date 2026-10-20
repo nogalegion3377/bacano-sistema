@@ -61,9 +61,12 @@ const S = {user: null, rol: "general", tab: "inicio", data: null, extra: {}, sav
   qc: "", qcmd: "", fcmd: "todas", diaCmd: null, qmenu: "", verOff: false,
   per: "semana", desde: null, hasta: null, htab: "", hdesde: null};
 let D;
-function newDraft() { D = {editId: null, editNro: null, q: {}, cli: null, nombre: "", dir: "", tel: "", tipo: "delivery", pago: "efectivo", extra: [], desc: 0, nota: "", busca: "", qprod: ""}; }
+function newDraft() { D = {editId: null, editNro: null, q: {}, sab: {}, cli: null, nombre: "", dir: "", tel: "", tipo: "delivery", pago: "efectivo", extra: [], desc: 0, nota: "", busca: "", qprod: ""}; }
 newDraft();
 const esAdmin = () => S.rol === "admin";
+const tieneSab = p => p && Array.isArray(p.sabores) && p.sabores.length > 0;
+const sabTxt = o => Object.entries(o || {}).filter(([, v]) => v > 0).map(([k, v]) => `${v} ${k}`).join(" · ");
+function faltan(id) { const p = pr(id); if (!tieneSab(p)) return 0; const tot = Object.values(D.sab[id] || {}).reduce((a, v) => a + v, 0); return (D.q[id] || 0) * (p.unidades || 1) - tot; }
 const vivos = c => (c.comanda_items || []).filter(i => !i.reemplazado);
 
 /* ================= DATOS ================= */
@@ -98,6 +101,7 @@ async function cargarExtra() {
     const [d, h] = periodo(), len = (new Date(h) - new Date(d)) / 864e5 + 1;
     const [act, ant] = await Promise.all([q(sb.rpc("reporte", {p_desde: d, p_hasta: h})), q(sb.rpc("reporte", {p_desde: addDays(d, -len), p_hasta: addDays(d, -1)}))]);
     S.extra.rep = act; S.extra.ant = ant;
+    S.extra.sab = await q(sb.rpc("sabores_vendidos", {p_desde: d, p_hasta: h}));
   }
   if (t === "historial" && esAdmin()) {
     let qq = sb.from("auditoria").select("*").order("fecha", {ascending: false}).limit(200);
@@ -156,7 +160,7 @@ async function ir(tab) { S.tab = tab; $("#main") && ($("#main").style.opacity = 
 function filaComanda(c, full) {
   const its = vivos(c), an = c.estado === "anulada";
   return `<div class="li cmdrow ${an ? "anulada" : ""}"><span class="num" style="font-weight:800;min-width:38px">#${c.nro}</span>
-    <div class="grow"><b>${its.map(i => `${i.cantidad} ${esc(i.nombre)}`).join(", ") || "—"}</b>
+    <div class="grow"><b>${its.map(i => `${i.cantidad} ${esc(i.nombre)}${i.sabores ? ` (${esc(sabTxt(i.sabores))})` : ""}`).join(", ") || "—"}</b>
       <span>${hora(c.fecha)} hs · ${c.tipo === "delivery" ? "Delivery" : "Mostrador"}${c.cliente_nombre ? " · " + esc(c.cliente_nombre) : ""}${full && c.direccion ? " · " + esc(c.direccion) : ""}</span>
       ${an ? `<span style="color:var(--bad);font-weight:700;display:block">Eliminada: ${esc(c.motivo_anulacion || "")}</span>` : ""}
       ${full && c.nota ? `<span style="display:block">Nota: ${esc(c.nota)}</span>` : ""}</div>
@@ -220,7 +224,7 @@ VISTAS.comanda = () => {
     <section class="panel"><h2 class="panel-h">1 · ¿Qué pide? <input class="inp" id="qprod" placeholder="Buscar en la carta…" value="${esc(D.qprod)}" style="max-width:240px;padding:7px 10px;font-size:.95rem"></h2><div>
       ${groups.length ? groups.map(g => `<h3 class="grp">${esc(g)}</h3>${prods.filter(p => p.categoria === g).map(p => { const n = D.q[p.id] || 0;
         return `<div class="prod ${n ? "on" : ""}" data-p="${p.id}" role="checkbox" aria-checked="${!!n}" tabindex="0"><span class="box">✓</span><span class="pn">${esc(p.nombre)}</span><span class="pp money">${peso(p.precio)}</span>
-        ${n ? `<span class="stp"><button data-qd="-1" aria-label="Uno menos">−</button><output>${n}</output><button data-qd="1" aria-label="Uno más">＋</button></span>` : "<span></span>"}</div>`; }).join("")}`).join("") : `<div class="empty">No hay nada con ese nombre en la carta.</div>`}
+        ${n ? `<span class="stp"><button data-qd="-1" aria-label="Uno menos">−</button><output>${n}</output><button data-qd="1" aria-label="Uno más">＋</button></span>` : "<span></span>"}</div>${n && tieneSab(p) ? sabHTML(p) : ""}`; }).join("")}`).join("") : `<div class="empty">No hay nada con ese nombre en la carta.</div>`}
     </div></section>
     <aside class="cmd-side">
       <section class="panel"><h2 class="panel-h">2 · Cliente</h2>
@@ -240,7 +244,7 @@ VISTAS.comanda = () => {
         <div class="two" style="margin-top:8px"><button class="btn" data-act="extra">＋ Agregar</button><label class="field" style="flex-direction:row;align-items:center;gap:6px">Descuento $<input class="inp" id="f-desc" value="${D.desc || ""}" inputmode="numeric" placeholder="0" style="padding:8px"></label></div>
       </section>
       <section class="panel"><h2 class="panel-h">4 · Cobro</h2>
-        <div class="lines">${its.length || D.extra.length ? its.map(i => `<div><span>${i.c} × ${esc(i.p.nombre)}</span><span class="money">${peso(N(i.p.precio) * i.c)}</span></div>`).join("") + D.extra.map((e, k) => `<div><span>✎ ${esc(e.n)} <button data-delx="${k}" aria-label="Quitar" style="color:var(--bad);font-weight:800">✕</button></span><span class="money">${peso(e.p)}</span></div>`).join("") + (D.desc > 0 ? `<div><span>Descuento</span><span class="money">${peso(-D.desc)}</span></div>` : "") : `<div class="x">Todavía no tildaste nada</div>`}</div>
+        <div class="lines">${its.length || D.extra.length ? its.map(i => `<div><span>${i.c} × ${esc(i.p.nombre)}${tieneSab(i.p) && sabTxt(D.sab[i.id]) ? `<br><small style="color:var(--muted)">${esc(sabTxt(D.sab[i.id]))}</small>` : ""}</span><span class="money">${peso(N(i.p.precio) * i.c)}</span></div>`).join("") + D.extra.map((e, k) => `<div><span>✎ ${esc(e.n)} <button data-delx="${k}" aria-label="Quitar" style="color:var(--bad);font-weight:800">✕</button></span><span class="money">${peso(e.p)}</span></div>`).join("") + (D.desc > 0 ? `<div><span>Descuento</span><span class="money">${peso(-D.desc)}</span></div>` : "") : `<div class="x">Todavía no tildaste nada</div>`}</div>
         <div class="total"><span style="font-weight:800">Total</span><b class="money">${peso(total)}</b></div>
         <div class="seg" style="margin:10px 0"><button data-pago="efectivo" aria-pressed="${D.pago === "efectivo"}"><span class="ic">💵</span>Efectivo</button><button data-pago="transferencia" aria-pressed="${D.pago === "transferencia"}"><span class="ic">📱</span>Transfer.</button><button class="fiado" data-pago="fiado" aria-pressed="${D.pago === "fiado"}"><span class="ic">📒</span>Fiado</button></div>
         ${D.pago === "fiado" && !c && !D.nombre.trim() ? `<div class="warnbox" style="margin-bottom:10px">Para fiar, elegí un cliente o escribí su nombre.</div>` : ""}
@@ -249,6 +253,12 @@ VISTAS.comanda = () => {
     </aside>
   </div>`;
 };
+function sabHTML(p) {
+  const f = faltan(p.id), tot = (D.q[p.id] || 0) * (p.unidades || 1), o = D.sab[p.id] || {};
+  return `<div class="sabs"><span class="sabst ${f === 0 ? "ok" : "falta"}">${f === 0 ? `✓ Sabores listos (${tot})` : f > 0 ? `Elegí los sabores: faltan ${f} de ${tot}` : `Te pasaste por ${-f}: tienen que ser ${tot}`}</span>
+    ${p.sabores.map(sb => `<span class="sab ${o[sb] ? "on" : ""}"><span>${esc(sb)}</span><span class="stp"><button data-sab="${p.id}" data-sb="${esc(sb)}" data-sd="-1" aria-label="Uno menos de ${esc(sb)}">−</button><output>${o[sb] || 0}</output><button data-sab="${p.id}" data-sb="${esc(sb)}" data-sd="1" aria-label="Uno más de ${esc(sb)}">＋</button></span></span>`).join("")}
+    ${f > 0 ? `<span class="sabq">${p.sabores.map(sb => `<button class="chip" data-saball="${p.id}" data-sb="${esc(sb)}">Completar con ${esc(sb)}</button>`).join("")}</span>` : ""}</div>`;
+}
 function sugHTML() {
   const t = D.busca.trim().toLowerCase(); if (t.length < 2) return "";
   const dig = t.replace(/\D/g, "");
@@ -260,15 +270,18 @@ function editarComanda(c) {
   newDraft();
   Object.assign(D, {editId: c.id, editNro: c.nro, cli: c.cliente_id && cl(c.cliente_id) ? c.cliente_id : null, nombre: c.cliente_nombre || "", dir: c.direccion || "", tel: c.telefono || "",
     tipo: c.tipo, pago: c.pago, desc: N(c.descuento), nota: c.nota || ""});
-  vivos(c).forEach(i => { if (i.manual) D.extra.push({n: i.nombre, p: N(i.precio_unit)}); else if (i.producto_id) D.q[i.producto_id] = (D.q[i.producto_id] || 0) + i.cantidad; });
+  vivos(c).forEach(i => { if (i.manual) D.extra.push({n: i.nombre, p: N(i.precio_unit)}); else if (i.producto_id) { D.q[i.producto_id] = (D.q[i.producto_id] || 0) + i.cantidad;
+    if (i.sabores) { const o = D.sab[i.producto_id] = D.sab[i.producto_id] || {}; for (const [k, v] of Object.entries(i.sabores)) o[k] = (o[k] || 0) + N(v); } } });
   S.tab = "comanda"; render(false); scrollTo(0, 0);
 }
 async function guardar() {
   const {its} = totals();
   if (!its.length && !D.extra.length) return toast("Tildá al menos un producto", true);
   if (D.pago === "fiado" && !D.cli && !D.nombre.trim()) return toast("Para fiar, elegí un cliente o escribí su nombre", true);
+  const mal = its.find(i => tieneSab(i.p) && faltan(i.id) !== 0);
+  if (mal) { const f = faltan(mal.id); return toast(f > 0 ? `Faltan elegir ${f} sabores de ${mal.p.nombre}` : `Sobran ${-f} sabores en ${mal.p.nombre}`, true); }
   const p = {cliente_id: D.cli, cliente_nombre: D.cli ? null : D.nombre, direccion: D.dir, telefono: D.tel, nota: D.nota,
-    tipo: D.tipo, pago: D.pago, descuento: N(D.desc), items: its.map(i => ({producto_id: +i.id, cantidad: i.c})), extras: D.extra.map(e => ({nombre: e.n, precio: e.p}))};
+    tipo: D.tipo, pago: D.pago, descuento: N(D.desc), items: its.map(i => ({producto_id: +i.id, cantidad: i.c, ...(tieneSab(i.p) ? {sabores: D.sab[i.id] || {}} : {})})), extras: D.extra.map(e => ({nombre: e.n, precio: e.p}))};
   S.saving = true; render(false);
   try {
     const edit = D.editId;
@@ -284,7 +297,7 @@ async function guardar() {
 function ticketHTML(c) {
   return `<div class="ticket"><img src="${LOGO}" alt=""><div class="c big">${NEGOCIO.nombre}</div><div class="c">WhatsApp ${NEGOCIO.tel}</div><div class="c">${NEGOCIO.dir}</div><hr>
   <div class="row"><b>COMANDA #${c.nro}</b><span>${dia(c.fecha)} ${hora(c.fecha)}</span></div><div><b>${c.tipo === "delivery" ? "DELIVERY" : "MOSTRADOR"}</b>${c.estado === "anulada" ? " · ELIMINADA" : c.editada ? " · CORREGIDA" : ""}</div><hr>
-  ${vivos(c).map(i => `<div class="row"><span>${i.manual ? "* " : i.cantidad + " x "}${esc(i.nombre)}</span><span>${peso(N(i.precio_unit) * i.cantidad)}</span></div>`).join("")}
+  ${vivos(c).map(i => `<div class="row"><span>${i.manual ? "* " : i.cantidad + " x "}${esc(i.nombre)}</span><span>${peso(N(i.precio_unit) * i.cantidad)}</span></div>${i.sabores ? Object.entries(i.sabores).filter(([, v]) => v > 0).map(([k, v]) => `<div class="sabt">&nbsp;&nbsp;${v} ${esc(k)}</div>`).join("") : ""}`).join("")}
   ${N(c.descuento) ? `<div class="row"><span>Descuento</span><span>${peso(-c.descuento)}</span></div>` : ""}<hr>
   <div class="row big"><span>TOTAL</span><span>${peso(c.total)}</span></div><div>Pago: ${c.pago.toUpperCase()}</div>
   ${c.cliente_nombre || c.direccion ? `<hr>${c.cliente_nombre ? `<div><b>${esc(c.cliente_nombre)}</b></div>` : ""}${c.direccion ? `<div>${esc(c.direccion)}</div>` : ""}${c.telefono ? `<div>Tel: ${esc(c.telefono)}</div>` : ""}` : ""}
@@ -451,6 +464,8 @@ VISTAS.reportes = () => {
           ${pagos.map(([l, v]) => `<div class="hbar"><span style="font-weight:700">${l}</span><span class="track"><i style="width:${N(v) / pmax * 100}%;${l === "Fiado" ? "background:var(--bad)" : ""}"></i></span><b class="money">${peso(v)}</b></div>`).join("")}
           <p style="margin:10px 0 0;color:var(--muted);font-size:.9rem">Además cobraron ${peso(r.cobrado_deudas)} de deudas viejas.</p>
         </section>
+        ${(S.extra.sab || []).length ? `<section class="panel"><h2 class="panel-h">Empanadas por sabor <small>${(S.extra.sab || []).reduce((a, x) => a + N(x.cantidad), 0)} empanadas</small></h2>
+          ${(() => { const m = Math.max(1, ...S.extra.sab.map(x => N(x.cantidad))); return S.extra.sab.map(x => `<div class="hbar"><span style="font-weight:700">${esc(x.sabor)}</span><span class="track"><i style="width:${N(x.cantidad) / m * 100}%"></i></span><b>${N(x.cantidad)}</b></div>`).join(""); })()}</section>` : ""}
         <section class="panel"><h2 class="panel-h">Delivery y mostrador</h2>
           <div class="lines" style="font-size:1rem;gap:6px"><div><span>🛵 Delivery</span><b>${N(r.delivery)} comandas</b></div><div><span>🏪 Mostrador</span><b>${N(r.mostrador)} comandas</b></div>
           <div style="border-top:1px solid var(--line);padding-top:6px"><span>Mercadería usada</span><b class="money">${peso(r.costo)}</b></div></div>
@@ -566,8 +581,10 @@ document.addEventListener("click", async e => {
   if (ds.act === "recargar") { await render(); return toast("Actualizado"); }
   if (ds.act === "nueva") { if (!D.editId) return ir("comanda"); newDraft(); return ir("comanda"); }
   if (ds.act === "canceledit") { newDraft(); return ir("comandas"); }
-  if (ds.qd) { const id = t.closest(".prod").dataset.p; D.q[id] = (D.q[id] || 0) + +ds.qd; if (D.q[id] <= 0) delete D.q[id]; return render(false); }
-  if (ds.p) { if (D.q[ds.p]) delete D.q[ds.p]; else D.q[ds.p] = 1; return render(false); }
+  if (ds.qd) { const id = t.closest(".prod").dataset.p; D.q[id] = (D.q[id] || 0) + +ds.qd; if (D.q[id] <= 0) { delete D.q[id]; delete D.sab[id]; } return render(false); }
+  if (ds.p) { if (D.q[ds.p]) { delete D.q[ds.p]; delete D.sab[ds.p]; } else D.q[ds.p] = 1; return render(false); }
+  if (ds.sab) { const o = D.sab[ds.sab] = D.sab[ds.sab] || {}; o[ds.sb] = Math.max(0, (o[ds.sb] || 0) + +ds.sd); return render(false); }
+  if (ds.saball) { const o = D.sab[ds.saball] = D.sab[ds.saball] || {}, f = faltan(ds.saball); if (f > 0) o[ds.sb] = (o[ds.sb] || 0) + f; return render(false); }
   if (ds.cli) { const c = cl(ds.cli); Object.assign(D, {cli: c.id, nombre: c.nombre, dir: c.direccion || "", tel: c.telefono || "", busca: ""}); return render(false); }
   if (ds.act === "quitarcli") { Object.assign(D, {cli: null, nombre: "", dir: "", tel: ""}); return render(false); }
   if (ds.tipo) { D.tipo = ds.tipo; return render(false); }
@@ -610,7 +627,7 @@ const enRecetas = insId => S.data.recetas.filter(r => r.insumo_id == insId && pr
 function xlsComandas(lista, nombre) {
   bajar(nombre, [["Fecha","Hora","Comanda","Estado","Cliente","Dirección","Teléfono","Tipo","Pago","Detalle","Descuento","Total","Mercadería","Ganancia","Nota"],
     ...lista.map(c => [dia(c.fecha), hora(c.fecha), c.nro, c.estado === "anulada" ? "Eliminada: " + (c.motivo_anulacion || "") : c.editada ? "Corregida" : "OK", c.cliente_nombre, c.direccion, c.telefono, c.tipo, c.pago,
-      vivos(c).map(i => `${i.cantidad} ${i.nombre}`).join(", "), numXL(c.descuento), numXL(c.total), numXL(c.costo), numXL(N(c.total) - N(c.costo)), c.nota])]);
+      vivos(c).map(i => `${i.cantidad} ${i.nombre}${i.sabores ? " (" + sabTxt(i.sabores) + ")" : ""}`).join(", "), numXL(c.descuento), numXL(c.total), numXL(c.costo), numXL(N(c.total) - N(c.costo)), c.nota])]);
   toast("Se descargó el archivo para Excel");
 }
 
@@ -767,7 +784,7 @@ function insumoModal(id) {
   }, true);
 }
 async function productoModal(id) {
-  const p = id ? pr(id) : {nombre: "", categoria: "Pizzas", precio: "", costo_fijo: null};
+  const p = id ? pr(id) : {nombre: "", categoria: "Pizzas", precio: "", costo_fijo: null, sabores: null, unidades: 1};
   let rec = [];
   if (id) { try { rec = (await q(sb.from("recetas").select("*").eq("producto_id", id))).map(r => ({insumo_id: r.insumo_id, cantidad: N(r.cantidad)})); } catch (e) { return fail(e); } }
   const cats = [...new Set(S.data.productos.map(x => x.categoria))], lista = activos(S.data.insumos);
@@ -780,6 +797,8 @@ async function productoModal(id) {
     <div class="two"><label class="field">Categoría<input class="inp" id="p-c" value="${esc(p.categoria)}" list="cats"><datalist id="cats">${cats.map(c => `<option>${esc(c)}</option>`).join("")}<option>Bebidas</option></datalist></label>
     <label class="field">Precio de venta ($)<input class="inp" id="p-p" value="${p.precio ? Math.round(N(p.precio)) : ""}" inputmode="numeric"></label></div>
   </div>
+  <div class="sec"><label class="field">Sabores para elegir (separados por coma) · dejalo vacío si no tiene<input class="inp" id="p-s" value="${esc((p.sabores || []).join(", "))}" placeholder="Ej: Carne, Pollo, Verdura, Jamón y queso"></label>
+    <label class="field">¿Cuántas unidades trae cada uno?<input class="inp" id="p-u" value="${p.unidades || 1}" inputmode="numeric" placeholder="Docena = 12"></label></div>
   <h4>Receta <small style="color:var(--muted);font-weight:600">qué mercadería usa cada unidad · se descuenta sola al vender</small></h4>
   <div class="stack" style="gap:6px" id="p-rec">${recHTML()}</div>
   <div class="acts" style="justify-content:space-between"><button class="btn btn-sm" id="p-radd">＋ Agregar ingrediente</button><span id="p-cost" style="font-weight:800"></span></div>
@@ -793,7 +812,9 @@ async function productoModal(id) {
     pintar();
     $("#p-radd").onclick = () => { leer(); rec.push({insumo_id: lista[0]?.id, cantidad: 0}); pintar(); };
     $("#p-ok").onclick = e => { leer();
-      const v = {nombre: $("#p-n").value.trim(), categoria: $("#p-c").value.trim() || "Otros", precio: soloNum($("#p-p").value), costo_fijo: soloNum($("#p-f").value) || null};
+      const sbs = $("#p-s").value.split(",").map(x => x.trim()).filter(Boolean);
+      const v = {nombre: $("#p-n").value.trim(), categoria: $("#p-c").value.trim() || "Otros", precio: soloNum($("#p-p").value), costo_fijo: soloNum($("#p-f").value) || null,
+        sabores: sbs.length ? [...new Set(sbs)] : null, unidades: Math.max(1, Math.round(soloNum($("#p-u").value)) || 1)};
       if (!v.nombre) return toast("Escribí el nombre", true);
       if (!v.precio) return toast("Poné el precio de venta", true);
       const rv = rec.filter(r => r.insumo_id && r.cantidad > 0), dup = rv.map(r => r.insumo_id).filter((x, k, a) => a.indexOf(x) !== k);
