@@ -12,7 +12,7 @@ Sistema de gestión de la pizzería: comandas con impresión, clientes con fiado
 
 ## Vercel
 
-Importar este repositorio en Vercel con **Root Directory = `web`**. No necesita build: es HTML estático.
+Importar este repositorio en Vercel tal cual. El `vercel.json` de la raíz ya le indica que publique la carpeta `web`. No necesita build: es HTML estático.
 
 ## Programa de escritorio
 
