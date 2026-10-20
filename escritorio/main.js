@@ -5,7 +5,7 @@ const path = require("path");
 const fs = require("fs");
 
 // Link del sistema en Vercel. Se puede cambiar desde la pantalla de configuración (Ctrl + ,).
-const LINK_POR_DEFECTO = "";
+const LINK_POR_DEFECTO = "https://bacano-sistema.vercel.app";
 
 const archivoConfig = () => path.join(app.getPath("userData"), "configuracion.json");
 function leerConfig() {
