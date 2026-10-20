@@ -1,0 +1,49 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Pizza Bacano · Configuración</title><link rel="stylesheet" href="estilo.css"></head>
+<body><form class="card" id="f">
+<img src="logo.webp" alt="Pizza Bacano">
+<h1>Configuración</h1>
+<p>Esto se hace una sola vez en cada computadora.</p>
+<label>Link del sistema
+  <input id="link" placeholder="https://pizza-bacano.vercel.app" autocomplete="off" required>
+  <span class="hint">Es la dirección que te dio Vercel.</span>
+</label>
+<label>Impresora de comandas
+  <select id="imp"></select>
+  <span class="hint">Si elegís una, los tickets salen directo sin preguntar.</span>
+</label>
+<label>Copias de cada ticket
+  <select id="cop"><option value="1">1 copia</option><option value="2">2 copias (cocina y delivery)</option></select>
+</label>
+<div class="msg" id="msg"></div>
+<div class="row"><button type="button" id="prueba">Imprimir prueba</button><button class="p" type="submit">Guardar y entrar</button></div>
+<small class="v" id="ver"></small>
+</form>
+<div id="print" hidden></div>
+<style>
+@media print{@page{size:80mm auto;margin:0}body{display:block;padding:0;background:#fff}.card{display:none}#print{display:block!important;width:72mm;font-family:"Courier New",monospace;font-size:14px;text-align:center;padding:2mm}}
+</style>
+<script>
+const A = window.bacanoApp, $ = s => document.querySelector(s), msg = (t, ok) => { $("#msg").textContent = t; $("#msg").className = "msg " + (ok ? "ok" : "bad"); };
+(async () => {
+  const c = await A.leerConfig();
+  $("#link").value = c.link || "";
+  $("#cop").value = String(c.copias || 1);
+  const lista = await A.impresoras();
+  $("#imp").innerHTML = `<option value="">Preguntar cada vez (sin impresora fija)</option>` +
+    lista.map(p => `<option value="${p.nombre.replace(/"/g, "&quot;")}">${p.visible}${p.predeterminada ? " (predeterminada)" : ""}</option>`).join("");
+  $("#imp").value = c.impresora || "";
+  if (!lista.length) msg("No se encontró ninguna impresora instalada en esta computadora.", false);
+  $("#ver").textContent = "Versión del programa " + await A.version();
+})();
+const guardar = () => A.guardarConfig({ link: $("#link").value, impresora: $("#imp").value, copias: +$("#cop").value });
+$("#prueba").onclick = async () => {
+  const r = await guardar(); if (r.error) return msg(r.error, false);
+  $("#print").innerHTML = "<b>PIZZA BACANO</b><br>Prueba de impresión<br>" + new Date().toLocaleString("es-AR") + "<br>----------------<br>Si leés esto, la comandera<br>está bien configurada ✔";
+  const p = await A.imprimir(); p && p.error ? msg("No se pudo imprimir: " + p.error, false) : msg("Se mandó la prueba a la impresora.", true);
+};
+$("#f").onsubmit = async e => {
+  e.preventDefault();
+  const r = await guardar(); if (r.error) return msg(r.error, false);
+  msg("Guardado. Entrando…", true); A.abrirSistema();
+};
+</script></body></html>

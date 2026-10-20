@@ -1,0 +1,13 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Pizza Bacano · Sin conexión</title><link rel="stylesheet" href="estilo.css"></head>
+<body><div class="card">
+<img src="logo.webp" alt="Pizza Bacano">
+<h1>No hay conexión a internet</h1>
+<p>El sistema necesita internet para guardar las comandas. Revisá el wifi o el cable del módem.</p>
+<div class="spin" aria-hidden="true"></div>
+<p>Se vuelve a conectar solo en unos segundos…</p>
+<div class="row"><button id="cfg">Configuración</button><button class="p" id="ya">Reintentar ahora</button></div>
+</div>
+<script>
+document.getElementById("ya").onclick = () => window.bacanoApp.abrirSistema();
+document.getElementById("cfg").onclick = () => window.bacanoApp.abrirConfiguracion();
+</script></body></html>
